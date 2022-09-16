@@ -2,6 +2,7 @@
 // which tool is currently selected
 
 use egui::{panel::Side, ImageButton, vec2, TextureId};
+use egui_extras::RetainedImage;
 
 #[derive(Copy, Clone, Debug)]
 enum Tool {
@@ -10,6 +11,49 @@ enum Tool {
     Electron,
     //Murphy
 }
+
+const TILE_IMAGES:[&str; 40] = [
+    "empty.png",
+    "zonk.png",
+    "base.png",
+    "murphy.png",
+    "info.png",
+    "ram.png",
+    "hw8.png",
+    "exit.png",
+    "disk-orange.png",
+    "port-lr.png",
+    "port-ud.png",
+    "port-rl.png",
+    "port-du.png",
+    "gport-lr.png",
+    "gport-ud.png",
+    "gport-rl.png",
+    "gport-du.png",
+    "ssnak.png",
+    "disk-yellow.png",
+    "terminal.png",
+    "disk-red.png",
+    "port-v.png",
+    "port-h.png",
+    "port-x.png",
+    "electron.png",
+    "bug.png",
+    "ramleft.png",
+    "ramright.png",
+    "hw1.png",
+    "hw2.png",
+    "hw3.png",
+    "hw4.png",
+    "hw5.png",
+    "hw6.png",
+    "hw7.png",
+    "hw8.png",
+    "hw9.png",
+    "hw10.png",
+    "ramtop.png",
+    "rambottom.png",
+];
 
 pub struct ToolPanel
 {
@@ -34,7 +78,7 @@ impl ToolPanel {
             ui.heading(&self.heading);
             ui.set_width(self.width);
 
-            let mut btn = ImageButton::new(TextureId::default(), vec2(10.0, 10.0));
+            let mut btn = ImageButton::new(TextureId::default(), vec2(40.0, 40.0));
             btn = btn.selected(matches!(self.selected_tool, Some(Tool::Electron)));
             if ui.add(btn).clicked() {
                 self.selected_tool = if let Some(Tool::Electron) = self.selected_tool {None} else { Some(Tool::Electron) };
@@ -47,5 +91,12 @@ impl ToolPanel {
                 println!("{:?}", self.selected_tool);
             }
         });
+    }
+
+    pub fn load_images(&mut self) {
+        for name in TILE_IMAGES {
+            let image = RetainedImage::from_image_bytes(
+                "../img/zonk.png", include_bytes!("../img/zonk.png") );
+        }
     }
 }
