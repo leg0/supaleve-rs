@@ -65,7 +65,7 @@ impl Default for SupaleveApp {
         Self {
             name: "lego".to_owned(),
             age: 42,
-            tool_panel: ToolPanel::new("Tools", 100.0),
+            tool_panel: ToolPanel::new("Tools", 120.0),
             status_panel: StatusPanel::new()
         }
     }
