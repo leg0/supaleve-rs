@@ -124,7 +124,7 @@ const TILE_IMAGES:[&str; 40] = [
     "port-x.png",
     "electron.png",
     "bug.png",
-    "ramleft.png",
+    "ramh.png",
     "ramright.png",
     "hw1.png",
     "hw2.png",
@@ -136,7 +136,7 @@ const TILE_IMAGES:[&str; 40] = [
     "hw8.png",
     "hw9.png",
     "hw10.png",
-    "ramtop.png",
+    "ramv.png",
     "rambottom.png",
 ];
 
@@ -157,12 +157,10 @@ impl ToolPanel {
                 Tool::new(Tile::Empty),
                 Tool::new(Tile::Zonk),
                 Tool::new(Tile::Base),
+                Tool::new(Tile::Bug),
                 Tool::new(Tile::Murphy),
                 Tool::new(Tile::Infotron),
-                Tool::new(Tile::RamChip),
-                Tool::new(Tile::Wall),
                 Tool::new(Tile::Exit),
-                Tool::new(Tile::FloppyOrange),
                 Tool::new(Tile::PortRight),
                 Tool::new(Tile::PortDown),
                 Tool::new(Tile::PortLeft),
@@ -171,16 +169,19 @@ impl ToolPanel {
                 Tool::new(Tile::GravityPortDown),
                 Tool::new(Tile::GravityPortLeft),
                 Tool::new(Tile::GravityPortUp),
-                Tool::new(Tile::SnikSnak),
-                Tool::new(Tile::FloppyYellow),
-                Tool::new(Tile::Terminal),
-                Tool::new(Tile::FloppyRed),
                 Tool::new(Tile::Port2WayVertical),
                 Tool::new(Tile::Port2WayHorizontal),
                 Tool::new(Tile::Port4Way),
+                Tool::new(Tile::FloppyOrange),
+                Tool::new(Tile::SnikSnak),
+                Tool::new(Tile::FloppyRed),
                 Tool::new(Tile::Electron),
-                Tool::new(Tile::Bug),
+                Tool::new(Tile::FloppyYellow),
+                Tool::new(Tile::Terminal),
                 Tool::new2x1(Tile::RamLeft, Tile::RamRight),
+                Tool::new1x2(Tile::RamTop, Tile::RamBottom),
+                Tool::new(Tile::RamChip),
+                Tool::new(Tile::Wall),
                 Tool::new(Tile::Hardware1),
                 Tool::new(Tile::Hardware2),
                 Tool::new(Tile::Hardware3),
@@ -191,7 +192,6 @@ impl ToolPanel {
                 Tool::new(Tile::Hardware8),
                 Tool::new(Tile::Hardware9),
                 Tool::new(Tile::Hardware10),
-                Tool::new1x2(Tile::RamTop, Tile::RamBottom),
             ],
             selected_tool: None
         }
@@ -213,8 +213,13 @@ impl ToolPanel {
     }
 
     fn draw_buttons(&mut self, ctx: &Context, ui: &mut Ui) {
-        let button_size = vec2(40., 40.);
         self.tools.iter().enumerate().for_each(|(tool_idx, tool)| {
+            let button_size = match tool.size {
+                (2, _) => vec2(80., 40.),
+                (_, 2) => vec2(40., 80.),
+                _ => vec2(40., 40.)
+            };
+
             let mut btn = ImageButton::new(tool.image1.texture_id(ctx), button_size);
             let tile = tool.tile1;
 
