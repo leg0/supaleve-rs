@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+
 use eframe::egui::{self};
 
 mod tool_panel;
@@ -8,9 +9,14 @@ use tool_panel::ToolPanel;
 mod status_panel;
 use status_panel::StatusPanel;
 
+mod editor_panel;
+use editor_panel::EditorPanel;
+
+mod images;
+
 fn main() {
-    let options = eframe::NativeOptions::default();
-    //options.fullscreen = true;
+    let mut options = eframe::NativeOptions::default();
+    options.fullscreen = true;
 
     eframe::run_native(
         "Supaplex Level Editor",
@@ -54,19 +60,17 @@ fn main() {
 // }
 
 struct SupaleveApp {
-    name: String,
-    age: u32,
     tool_panel: ToolPanel,
     status_panel: StatusPanel,
+    editor_panel: EditorPanel,
 }
 
 impl Default for SupaleveApp {
     fn default() -> Self {
         Self {
-            name: "lego".to_owned(),
-            age: 42,
             tool_panel: ToolPanel::new("Tools", 120.0),
-            status_panel: StatusPanel::new()
+            status_panel: StatusPanel::new(120.0),
+            editor_panel: EditorPanel::new("Supaplex level editor")
         }
     }
 }
@@ -74,19 +78,7 @@ impl Default for SupaleveApp {
 impl eframe::App for SupaleveApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.tool_panel.update(ctx, frame);
-
         self.status_panel.update(ctx, frame);
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Supaplex level editor");
-            ui.horizontal(|ui| {
-                ui.label("Your name: ");
-                ui.text_edit_singleline(&mut self.name);
-            });
-            ui.add(egui::Slider::new(&mut self.age, 0..=120).text("age"));
-            if ui.button("Click each year").clicked() {
-                self.age += 1;
-            }
-            ui.label(format!("Hello '{}', age {}", self.name, self.age));
-        });
+        self.editor_panel.update(ctx, frame);
     }
 }
