@@ -63,9 +63,9 @@ impl Images {
         }
     }
 
-    pub(crate) fn name_of(tile: Tile) -> &'static str {
-        TILE_IMAGES[tile as usize]
-    }
+    // pub(crate) fn name_of(tile: Tile) -> &'static str {
+    //     TILE_IMAGES[tile as usize]
+    // }
 }
 
 impl Index<Tile> for Images {

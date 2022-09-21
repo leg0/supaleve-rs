@@ -79,6 +79,6 @@ impl eframe::App for SupaleveApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         self.tool_panel.update(ctx, frame);
         self.status_panel.update(ctx, frame);
-        self.editor_panel.update(ctx, frame);
+        self.editor_panel.update(ctx, frame, &self.tool_panel);
     }
 }

@@ -74,6 +74,10 @@ impl Tool {
             image1: tool_panel.images[tile.0].clone(),
         }
     }
+
+    pub fn tile(&self) -> Tile {
+        self.tile1
+    }
 }
 
 pub struct ToolPanel
@@ -186,4 +190,7 @@ impl ToolPanel {
         });
     }
 
+    pub fn selected_tool(&self) -> Option<&Tool> {
+        self.selected_tool.map(|x| &self.tools[x])
+    }
 }
