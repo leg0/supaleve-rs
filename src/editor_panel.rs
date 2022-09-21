@@ -59,7 +59,9 @@ pub struct EditorPanel
     play_area: [Tile; PLAY_AREA_SIZE],
     highlight: [bool; PLAY_AREA_SIZE],
     tool_mode: Option<ToolMode>,
-    images: Images // TODO: share this between panels
+    images: Images, // TODO: share this between panels
+    ptr_primary: bool, // XXX: workaround for not detecting button release events 
+    ptr_secondary: bool,
 }
 
 impl EditorPanel {
@@ -69,7 +71,9 @@ impl EditorPanel {
             play_area: [Tile::Empty; PLAY_AREA_SIZE],
             highlight: [false; PLAY_AREA_SIZE],
             tool_mode: None,
-            images: Images::new()
+            images: Images::new(),
+            ptr_primary: false,
+            ptr_secondary: false,
         }
     }
 
@@ -85,6 +89,7 @@ impl EditorPanel {
                 for row in 0..PLAY_AREA_HEIGHT {
                     let hlayout = Layout::left_to_right(Align::Min).with_main_wrap(false);
                     ui.with_layout(hlayout, |ui| {
+
                         let sel_tool = tool_panel.selected_tool().map(|tool| tool.tile());
                         for col in 0..PLAY_AREA_WIDTH {
                             let tile_index = index(col, row);
@@ -99,11 +104,12 @@ impl EditorPanel {
                             if self.highlight[tile_index] {
                                 btn = btn.tint(Color32::DARK_GRAY);
                             }
-                            // TODO: different modes
-                            // - draw: left_mouse place tile where the cursor is
-                            // - line: shift+left_mouse to draw L-shaped line between start and end points.
-                            //      commit drawing on mouse-up
-                            //      cancel by releasing shift while mouse is down.
+                            // Different modes
+                            // [x] draw: left_mouse place tile where the cursor is
+                            // [x] line: shift+left_mouse to draw L-shaped line between start and end points.
+                            //    [x]  commit drawing on mouse-up
+                            //    [x]  cancel by releasing shift while mouse is down.
+                            //    [x]  toggle hv/vh with T
                             // - filled rect: ctrl+left_mouse to draw rectangle
                             //      commit drawing on mouse-up
                             //      cancel by releasing ctrl while mouse is down.
@@ -144,11 +150,10 @@ impl EditorPanel {
                             let input = &ui.input();
                             let modifiers = &input.modifiers;
                             let ptr = &input.pointer;
-                            println!("tool mode={:?}, shift={}, ctrl={}, prim_rel={}, sec_rel={}, prim_dn={}, sec_dn={}"
-                            , self.tool_mode, modifiers.shift, modifiers.ctrl, ptr.primary_released(), ptr.secondary_released()
-                            , ptr.primary_down(), ptr.secondary_down());
+                            let primary_released = || self.ptr_primary && !ptr.primary_down();
+                            let secondary_released = || self.ptr_secondary && !ptr.secondary_down();
 
-                            if (modifiers.shift || modifiers.ctrl) && ptr.primary_released() {
+                            if (modifiers.shift || modifiers.ctrl) && primary_released() {
                                 // Commit draw line / draw rect
                                 println!("Committing draw line");
                                 self.highlight.iter_mut().enumerate().filter(|(_, &mut x)| x).for_each(|(i, y)| {
@@ -157,7 +162,7 @@ impl EditorPanel {
                                 });
                                 self.tool_mode = None;
                             }
-                            else if (modifiers.shift || modifiers.ctrl) && ptr.secondary_released() {
+                            else if (modifiers.shift || modifiers.ctrl) && secondary_released() {
                                 // Commit delete rect / delete rect
                                 self.highlight.iter_mut().enumerate().filter(|(_, &mut x)| x).for_each(|(i, y)| {
                                     self.play_area[i] = Tile::Empty;
@@ -171,6 +176,8 @@ impl EditorPanel {
                                 self.highlight.fill(false);
                                 self.tool_mode = None;
                             }
+                            self.ptr_primary = ptr.primary_down();
+                            self.ptr_secondary = ptr.secondary_down();
                         }
                     });
                 }
