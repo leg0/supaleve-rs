@@ -1,7 +1,7 @@
 
 use std::marker::Copy;
 
-use egui::{Layout, Align, vec2, ImageButton, Sense, Modifiers, Color32, InputState, Key};
+use egui::{Layout, Align, vec2, ImageButton, Sense, Color32, InputState, Key, hex_color};
 
 use crate::{tool_panel::{Tile, ToolPanel}, images::Images};
 
@@ -39,16 +39,17 @@ impl LineMode {
 
 #[derive(Copy, Clone, Debug)]
 enum ToolMode {
-    Draw,
-    Line { start: usize, mode: LineMode }, // start of line
-    Rect { start: usize }, // start of rectangle
+    Nop,
+    Draw { tile: Tile },
+    Line { tile: Tile, start: usize, mode: LineMode },
+    Rect { tile: Tile, start: usize },
 }
 
 impl ToolMode {
     fn toggle_line_mode(&self) -> Self {
-        match self {
-            Self::Line { start, mode } => Self::Line { start: *start, mode: mode.toggle() },
-            _ => *self
+        match *self {
+            Self::Line { tile, start, mode } => Self::Line { tile, start, mode: mode.toggle() },
+            other => other
         }
     }
 }
@@ -90,32 +91,11 @@ impl EditorPanel {
                     let hlayout = Layout::left_to_right(Align::Min).with_main_wrap(false);
                     ui.with_layout(hlayout, |ui| {
 
-                        let sel_tool = tool_panel.selected_tool().map(|tool| tool.tile());
+                        let selected_tile = tool_panel.selected_tool().tile();
                         for col in 0..PLAY_AREA_WIDTH {
+                            let is_delete = ui.input().pointer.secondary_down();
                             let tile_index = index(col, row);
-                            let tile = match (sel_tool, self.highlight[tile_index]) {
-                                (Some(t), true) => t,
-                                _ => self.play_area[tile_index],
-                            };
-                            let texture_id = self.images[tile].texture_id(ctx);
-                            let mut btn = ImageButton::new(texture_id, vec2(32., 32.));
-                            btn = btn.frame(false);
-                            btn = btn.sense(Sense::hover());
-                            if self.highlight[tile_index] {
-                                btn = btn.tint(Color32::DARK_GRAY);
-                            }
-                            // Different modes
-                            // [x] draw: left_mouse place tile where the cursor is
-                            // [x] line: shift+left_mouse to draw L-shaped line between start and end points.
-                            //    [x]  commit drawing on mouse-up
-                            //    [x]  cancel by releasing shift while mouse is down.
-                            //    [x]  toggle hv/vh with T
-                            // - filled rect: ctrl+left_mouse to draw rectangle
-                            //      commit drawing on mouse-up
-                            //      cancel by releasing ctrl while mouse is down.
-                            // - delete: right_mouse remove tile where the cursor is
-                            // - delete_line: shift+right_mouse to delete L-shaped line between start and end points
-                            // - delete_rect: ctrl+right_mouse to delete rectangle
+                            let response = self.add_image_button(tile_index, selected_tile, is_delete, ctx, ui);
 
                             // - toggle between variants: T
                             //      * yellow, red, orange disk
@@ -125,64 +105,88 @@ impl EditorPanel {
                             //      * base/bug
                             //      * switch between line draw modes (HV/VH)
                             // - rotate: R (applies to 2-piece ram chips, ports)
-                            //      
-                            let response = ui.add(btn);
-                            if let Some(tool) = tool_panel.selected_tool() {
-                                if response.hovered() && ui.input().pointer.primary_down() {
-                                    let mode = self.get_tool_mode(tile_index, &ui.input());
-                                    self.tool_mode = Some(mode);
-                                    self.highlight.fill(false);
-                                    match mode {
-                                        ToolMode::Draw => self.play_area[tile_index] = tool.tile(),
-                                        ToolMode::Line { start, mode: LineMode::HorizontalFirst }
-                                            => self.line_horizontal_first(start, tile_index),
-                                        ToolMode::Line { start, mode: LineMode::VerticalFirst }
-                                            => self.line_vertical_first(start, tile_index),
-                                        _ => {},
-                                        // ToolMode::Rect { start } => {}
-                                    }
+                            //
+                            let ptr = &ui.input().pointer;
+                            if response.hovered() && (ptr.primary_down() || ptr.secondary_down()) {
+                                let mode = self.get_tool_mode(tile_index, selected_tile, &ui.input());
+                                self.tool_mode = Some(mode);
+                                self.highlight.fill(false);
+                                match mode {
+                                    ToolMode::Draw{tile}
+                                        => self.play_area[tile_index] = tile,
+                                    ToolMode::Line { tile: _, start, mode: LineMode::HorizontalFirst }
+                                        => self.line_horizontal_first(start, tile_index),
+                                    ToolMode::Line { tile: _, start, mode: LineMode::VerticalFirst }
+                                        => self.line_vertical_first(start, tile_index),
+                                    ToolMode::Rect { tile: _, start }
+                                        => self.rect(start, tile_index),
+                                    _ => {},
                                 }
                             }
                         }
 
-                        if let Some(_) = self.tool_mode {
-                            println!("tool mode={:?}", self.tool_mode);
-                            let input = &ui.input();
-                            let modifiers = &input.modifiers;
-                            let ptr = &input.pointer;
-                            let primary_released = || self.ptr_primary && !ptr.primary_down();
-                            let secondary_released = || self.ptr_secondary && !ptr.secondary_down();
-
-                            if (modifiers.shift || modifiers.ctrl) && primary_released() {
-                                // Commit draw line / draw rect
-                                println!("Committing draw line");
-                                self.highlight.iter_mut().enumerate().filter(|(_, &mut x)| x).for_each(|(i, y)| {
-                                    self.play_area[i] = sel_tool.unwrap();
-                                    *y = false;
-                                });
-                                self.tool_mode = None;
-                            }
-                            else if (modifiers.shift || modifiers.ctrl) && secondary_released() {
-                                // Commit delete rect / delete rect
-                                self.highlight.iter_mut().enumerate().filter(|(_, &mut x)| x).for_each(|(i, y)| {
-                                    self.play_area[i] = Tile::Empty;
-                                    *y = false;
-                                });
-                                self.tool_mode = None;
-                            }
-                            else if !modifiers.ctrl && !modifiers.shift {
-                                // Cancel the tool
-                                println!("Canceling the tool");
-                                self.highlight.fill(false);
-                                self.tool_mode = None;
-                            }
-                            self.ptr_primary = ptr.primary_down();
-                            self.ptr_secondary = ptr.secondary_down();
-                        }
+                        self.try_complete_tool(ui, selected_tile);
                     });
                 }
             });
         });
+    }
+
+    fn add_image_button(&self, tile_index: usize, tool_tile: Tile, is_delete: bool, ctx: &egui::Context, ui: &mut egui::Ui) -> egui::Response {
+        let tile = if self.highlight[tile_index] && !is_delete { tool_tile } else { self.play_area[tile_index] };
+        let texture_id = self.images[tile].texture_id(ctx);
+        let mut btn = ImageButton::new(texture_id, vec2(32., 32.));
+        btn = btn.frame(false);
+        btn = btn.sense(Sense::hover());
+        if self.highlight[tile_index] {
+            let tint_color = if is_delete { hex_color!("#ff808080") } else { Color32::DARK_GRAY };
+            btn = btn.tint(tint_color);
+        }
+        // 
+        //btn = btn.uv(egui::Rect{ min: Pos2{x: 0.1, y: 0.1 }, max: Pos2 { x: 0.5, y: 0.5 }});
+        let res = ui.add(btn);
+        res
+    }
+
+    fn try_complete_tool(&mut self, ui: &mut egui::Ui, selected_tool: Tile) {
+        if let Some(_) = self.tool_mode {
+            let input = ui.input();
+            let modifiers = &input.modifiers;
+            let ptr = &input.pointer;
+            let primary_released = || self.ptr_primary && !ptr.primary_down();
+            let secondary_released = || self.ptr_secondary && !ptr.secondary_down();
+
+            if (modifiers.shift || modifiers.ctrl) && primary_released() {
+                self.commit_draw(selected_tool);
+            }
+            else if (modifiers.shift || modifiers.ctrl) && secondary_released() {
+                self.commit_delete();
+            }
+            else if !modifiers.ctrl && !modifiers.shift {
+                self.cancel_tool();
+            }
+    
+            self.ptr_primary = ptr.primary_down();
+            self.ptr_secondary = ptr.secondary_down();
+        }
+    }
+
+    fn cancel_tool(&mut self) {
+        println!("Canceling the tool");
+        self.highlight.fill(false);
+        self.tool_mode = None;
+    }
+
+    fn commit_delete(&mut self) {
+        self.commit_draw(Tile::Empty);
+    }
+
+    fn commit_draw(&mut self, sel_tool: Tile) {
+        self.highlight.iter_mut().enumerate().filter(|(_, &mut x)| x).for_each(|(i, y)| {
+            self.play_area[i] = sel_tool;
+            *y = false;
+        });
+        self.tool_mode = None;
     }
 
     fn line_horizontal_first(&mut self, start: usize, tile_index: usize) {
@@ -215,14 +219,33 @@ impl EditorPanel {
         }
     }
 
-    fn get_tool_mode(&self, tile_index: usize, input: &InputState) -> ToolMode {
+    fn rect(&mut self, start: usize, end: usize) {
+        let (start_x, start_y) = col_row(start);
+        let (end_x, end_y) = col_row(end);
+        let (start_x, end_x) = minmax(start_x, end_x);
+        let (start_y, end_y) = minmax(start_y, end_y);
+
+        for row in start_y..=end_y {
+            let start = index(start_x, row);
+            let end = index(end_x, row);
+            self.highlight[start..=end].fill(true);
+        }
+    }
+
+    fn get_tool_mode(&self, start_tile_index: usize, selected_tool_tile: Tile, input: &InputState) -> ToolMode {
+        // shift = line
+        // ctrl = rect
+        // primary = draw
+        // secondary = delete
+        let tile = if input.pointer.primary_down() { selected_tool_tile } else { Tile::Empty };
         let modifiers = &input.modifiers;
         match self.tool_mode {
             Some(tool_mode) => Self::toggle_line_mode(tool_mode, input.key_released(Key::T)),
             None => match (modifiers.shift, modifiers.ctrl) {
-                (false, false) => ToolMode::Draw,
-                (true, false) => ToolMode::Line { start: tile_index, mode: LineMode::HorizontalFirst },
-                (_, true) => ToolMode::Rect { start: tile_index },
+                (false, false) => ToolMode::Draw{tile},
+                (true, false) => ToolMode::Line { tile, start: start_tile_index, mode: LineMode::HorizontalFirst },
+                (false, true) => ToolMode::Rect { tile, start: start_tile_index },
+                (true, true) => ToolMode::Nop,
             }
         }
     }

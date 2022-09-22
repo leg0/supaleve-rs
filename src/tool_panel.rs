@@ -85,7 +85,7 @@ pub struct ToolPanel
     heading: String,
     width: f32,
     tools: Vec<Tool>,
-    selected_tool: Option<usize>,
+    selected_tool: usize,
     images: Images,
 }
 
@@ -96,7 +96,7 @@ impl ToolPanel {
             heading: heading.to_owned(),
             width,
             tools: vec![],
-            selected_tool: None,
+            selected_tool: 0,
             images: Images::new(),
         };
         res.tools = res.make_tools();
@@ -179,18 +179,15 @@ impl ToolPanel {
             let mut btn = ImageButton::new(tool.image1.texture_id(ctx), button_size);
             let tile = tool.tile1;
 
-            let is_selected = match self.selected_tool {
-                Some(idx) => self.tools[idx].tile1 == tile,
-                None => false,
-            };
+            let is_selected =self.tools[self.selected_tool].tile1 == tile;
             btn = btn.selected(is_selected);
             if ui.add(btn).clicked() {
-                self.selected_tool = Some(tool_idx);
+                self.selected_tool = tool_idx;
             }
         });
     }
 
-    pub fn selected_tool(&self) -> Option<&Tool> {
-        self.selected_tool.map(|x| &self.tools[x])
+    pub fn selected_tool(&self) -> &Tool {
+        &self.tools[self.selected_tool]
     }
 }
