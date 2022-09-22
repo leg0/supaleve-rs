@@ -1,7 +1,7 @@
 
 use std::marker::Copy;
 
-use egui::{Layout, Align, vec2, ImageButton, Sense, Color32, InputState, Key, hex_color};
+use egui::{Layout, Align, vec2, ImageButton, Sense, Color32, InputState, Key, hex_color, containers::ComboBox};
 
 use crate::{tool_panel::{Tile, ToolPanel}, images::Images};
 
@@ -63,6 +63,7 @@ pub struct EditorPanel
     images: Images, // TODO: share this between panels
     ptr_primary: bool, // XXX: workaround for not detecting button release events 
     ptr_secondary: bool,
+    selected_level_index: usize,
 }
 
 impl EditorPanel {
@@ -75,12 +76,23 @@ impl EditorPanel {
             images: Images::new(),
             ptr_primary: false,
             ptr_secondary: false,
+            selected_level_index: 0,
         }
     }
 
     pub fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame, tool_panel: &ToolPanel) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading(&self.heading);
+
+            // TODO: get this from levels.dat
+            let levels = ["--- FIRST ---", "--- SECOND ---", "-- THIRD --"];
+
+            let cmb = ComboBox::from_label("level");
+            let cmb_res = cmb.show_index(ui, &mut self.selected_level_index, levels.len(), |i| levels[i].to_owned());
+            if cmb_res.changed() {
+                println!("{}", levels[self.selected_level_index]);
+                // TODO: switch to selected level
+            }
 
             let spacing = ui.spacing_mut();
             spacing.item_spacing = vec2(0., 0.);
