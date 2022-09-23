@@ -3,7 +3,7 @@ use std::marker::Copy;
 
 use egui::{Layout, Align, vec2, ImageButton, Sense, Color32, InputState, Key, hex_color, containers::ComboBox};
 
-use crate::{tool_panel::{Tile, ToolPanel}, images::Images};
+use crate::{tool_panel::{Tile, ToolPanel, OperatingMode}, images::Images};
 
 const PLAY_AREA_WIDTH: usize = 60;
 const PLAY_AREA_HEIGHT: usize = 24;
@@ -64,6 +64,7 @@ pub struct EditorPanel
     ptr_primary: bool, // XXX: workaround for not detecting button release events 
     ptr_secondary: bool,
     selected_level_index: usize,
+    selected_tile_index: Option<usize>,
 }
 
 impl EditorPanel {
@@ -77,6 +78,7 @@ impl EditorPanel {
             ptr_primary: false,
             ptr_secondary: false,
             selected_level_index: 0,
+            selected_tile_index: None
         }
     }
 
@@ -99,52 +101,77 @@ impl EditorPanel {
 
             let vlayout = Layout::top_down(Align::Min);
             ui.with_layout(vlayout, |ui| {
-                for row in 0..PLAY_AREA_HEIGHT {
-                    let hlayout = Layout::left_to_right(Align::Min).with_main_wrap(false);
-                    ui.with_layout(hlayout, |ui| {
-
-                        let selected_tile = tool_panel.selected_tool().tile();
-                        for col in 0..PLAY_AREA_WIDTH {
-                            let is_delete = ui.input().pointer.secondary_down();
-                            let tile_index = index(col, row);
-                            let response = self.add_image_button(tile_index, selected_tile, is_delete, ctx, ui);
-
-                            // - toggle between variants: T
-                            //      * yellow, red, orange disk
-                            //      * port, gravity port
-                            //      * different walls
-                            //      * ram chips
-                            //      * base/bug
-                            //      * switch between line draw modes (HV/VH)
-                            // - rotate: R (applies to 2-piece ram chips, ports)
-                            //
-                            let ptr = &ui.input().pointer;
-                            if response.hovered() && (ptr.primary_down() || ptr.secondary_down()) {
-                                let mode = self.get_tool_mode(tile_index, selected_tile, &ui.input());
-                                self.tool_mode = Some(mode);
-                                self.highlight.fill(false);
-                                match mode {
-                                    ToolMode::Draw{tile}
-                                        => self.play_area[tile_index] = tile,
-                                    ToolMode::Line { tile: _, start, mode: LineMode::HorizontalFirst }
-                                        => self.line_horizontal_first(start, tile_index),
-                                    ToolMode::Line { tile: _, start, mode: LineMode::VerticalFirst }
-                                        => self.line_vertical_first(start, tile_index),
-                                    ToolMode::Rect { tile: _, start }
-                                        => self.rect(start, tile_index),
-                                    _ => {},
-                                }
-                            }
-                        }
-
-                        self.try_complete_tool(ui, selected_tile);
-                    });
+                match tool_panel.operating_mode() {
+                    OperatingMode::Draw => self.do_draw(ui, tool_panel, ctx),
+                    OperatingMode::Select => self.do_select(ui, tool_panel, ctx)
                 }
             });
         });
     }
 
-    fn add_image_button(&self, tile_index: usize, tool_tile: Tile, is_delete: bool, ctx: &egui::Context, ui: &mut egui::Ui) -> egui::Response {
+    fn do_draw(&mut self, ui: &mut egui::Ui, tool_panel: &ToolPanel, ctx: &egui::Context) {
+        for row in 0..PLAY_AREA_HEIGHT {
+            let hlayout = Layout::left_to_right(Align::Min).with_main_wrap(false);
+            ui.with_layout(hlayout, |ui| {
+
+                let selected_tool_tile = tool_panel.selected_tool_tile();
+                for col in 0..PLAY_AREA_WIDTH {
+                    let is_delete = ui.input().pointer.secondary_down();
+                    let tile_index = index(col, row);
+                    let response = self.add_image_button_draw(tile_index, selected_tool_tile, is_delete, ctx, ui);
+
+                    // - toggle between variants: T
+                    //      * yellow, red, orange disk
+                    //      * port, gravity port
+                    //      * different walls
+                    //      * ram chips
+                    //      * base/bug
+                    //      * switch between line draw modes (HV/VH)
+                    // - rotate: R (applies to 2-piece ram chips, ports)
+                    //
+                    let ptr = &ui.input().pointer;
+                    if response.hovered() && (ptr.primary_down() || ptr.secondary_down()) {
+                        let mode = self.get_tool_mode(tile_index, selected_tool_tile, &ui.input());
+                        self.tool_mode = Some(mode);
+                        self.highlight.fill(false);
+                        match mode {
+                            ToolMode::Draw{tile}
+                                => self.play_area[tile_index] = tile,
+                            ToolMode::Line { tile: _, start, mode: LineMode::HorizontalFirst }
+                                => self.line_horizontal_first(start, tile_index),
+                            ToolMode::Line { tile: _, start, mode: LineMode::VerticalFirst }
+                                => self.line_vertical_first(start, tile_index),
+                            ToolMode::Rect { tile: _, start }
+                                => self.rect(start, tile_index),
+                            _ => {},
+                        }
+                    }
+                }
+
+                self.try_complete_tool(ui, selected_tool_tile);
+            });
+        }
+    }
+
+    fn do_select(&mut self, ui: &mut egui::Ui, tool_panel: &ToolPanel, ctx: &egui::Context) {
+        for row in 0..PLAY_AREA_HEIGHT {
+            let hlayout = Layout::left_to_right(Align::Min).with_main_wrap(false);
+            ui.with_layout(hlayout, |ui| {
+                for col in 0..PLAY_AREA_WIDTH {
+                    let tile_index = index(col, row);
+                    let is_selected = match self.selected_tile_index {
+                        Some(x) => x == tile_index,
+                        None => false,
+                    };
+                    if self.add_image_button_select(tile_index, is_selected, ctx, ui).clicked() {
+                        self.selected_tile_index = (!is_selected).then(|| tile_index) ;
+                    }
+                }
+            });
+        }
+    }
+    
+    fn add_image_button_draw(&self, tile_index: usize, tool_tile: Tile, is_delete: bool, ctx: &egui::Context, ui: &mut egui::Ui) -> egui::Response {
         let tile = if self.highlight[tile_index] && !is_delete { tool_tile } else { self.play_area[tile_index] };
         let texture_id = self.images[tile].texture_id(ctx);
         let mut btn = ImageButton::new(texture_id, vec2(32., 32.));
@@ -154,10 +181,18 @@ impl EditorPanel {
             let tint_color = if is_delete { hex_color!("#ff808080") } else { Color32::DARK_GRAY };
             btn = btn.tint(tint_color);
         }
-        // 
-        //btn = btn.uv(egui::Rect{ min: Pos2{x: 0.1, y: 0.1 }, max: Pos2 { x: 0.5, y: 0.5 }});
-        let res = ui.add(btn);
-        res
+        ui.add(btn)
+    }
+
+    fn add_image_button_select(&self, tile_index: usize, is_selected: bool, ctx: &egui::Context, ui: &mut egui::Ui) -> egui::Response {
+        let tile = self.play_area[tile_index];
+        let texture_id = self.images[tile].texture_id(ctx);
+        let mut btn = ImageButton::new(texture_id, vec2(32., 32.));
+        btn = btn.frame(false);
+        if is_selected {
+            btn = btn.tint(hex_color!("#80FF8080"));
+        }
+        ui.add(btn)
     }
 
     fn try_complete_tool(&mut self, ui: &mut egui::Ui, selected_tool: Tile) {
@@ -254,7 +289,7 @@ impl EditorPanel {
         match self.tool_mode {
             Some(tool_mode) => Self::toggle_line_mode(tool_mode, input.key_released(Key::T)),
             None => match (modifiers.shift, modifiers.ctrl) {
-                (false, false) => ToolMode::Draw{tile},
+                (false, false) => ToolMode::Draw { tile },
                 (true, false) => ToolMode::Line { tile, start: start_tile_index, mode: LineMode::HorizontalFirst },
                 (false, true) => ToolMode::Rect { tile, start: start_tile_index },
                 (true, true) => ToolMode::Nop,
